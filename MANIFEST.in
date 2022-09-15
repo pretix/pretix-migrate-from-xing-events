@@ -1,0 +1,5 @@
+recursive-include pretix_migrate_from_xing_events/static *
+recursive-include pretix_migrate_from_xing_events/templates *
+recursive-include pretix_migrate_from_xing_events/locale *
+include LICENSE
+exclude .gitlab-ci.yml
