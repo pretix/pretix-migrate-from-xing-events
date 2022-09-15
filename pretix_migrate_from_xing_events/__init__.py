@@ -16,7 +16,7 @@ class PluginApp(PluginConfig):
         name = gettext_lazy("Migration Assistant from XING Events")
         author = "pretix"
         description = gettext_lazy("Assists migrating from XING Events to pretix")
-        visible = True
+        visible = False
         version = __version__
         category = "INTEGRATION"
         compatibility = "pretix>=2.7.0"
