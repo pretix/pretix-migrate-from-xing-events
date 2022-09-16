@@ -1,14 +1,21 @@
+import datetime
+from decimal import Decimal
+from urllib.parse import urljoin
+
 import bleach
 import pytz
 import requests
 from dateutil.parser import parse
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils.crypto import get_random_string
 from i18nfield.strings import LazyI18nString
 
-from pretix.base.models import Event
+from pretix.base.channels import get_all_sales_channels
+from pretix.base.models import Event, ItemMetaValue, Item
+from pretix.base.settings import LazyI18nStringList
 from pretix.base.templatetags.rich_text import ALLOWED_TAGS, ALLOWED_ATTRIBUTES, ALLOWED_PROTOCOLS
 from .client import XINGEventsAPIClient
 
@@ -18,6 +25,7 @@ class XINGEventsImporter:
     def __init__(self, apikey, organizer):
         self.client = XINGEventsAPIClient(apikey=apikey)
         self.organizer = organizer
+        self._tax_rule = None
 
     @transaction.atomic()
     def import_event(self, event_id):
@@ -44,8 +52,15 @@ class XINGEventsImporter:
         value.name = newname
         return value
 
+    def _money_conversion(self, currency, int_val):
+        if currency in ('KRW', 'JPY'):
+            return Decimal(int_val)
+        else:
+            return Decimal(int_val) / Decimal('100.00')
+
     def _import_event_data(self, event_id):
         d = self.client._get(f'event/{event_id}')['event']
+        ts = self.client._get(f'event/{event_id}/ticketShop')['ticketShop']
 
         try:
             event = self.organizer.events.get(slug=d['identifier'])
@@ -57,10 +72,15 @@ class XINGEventsImporter:
 
         event.name = LazyI18nString({language: d['title']})
         event.date_from = tz.localize(parse(d['selectedDate']))
-        event.date_to = tz.localize(parse(d['selectedEndDate'])) if d['selectedEndDate'] else None
-        if d['longitude']:
+        event.date_to = tz.localize(parse(d['selectedEndDate'])) if d.get('selectedEndDate') else None
+        event.currency = ts['currency']
+
+        event.presale_start = tz.localize(parse(ts['registrationStartDate'])) if ts.get('registrationStartDate') else None
+        event.presale_end = tz.localize(parse(ts['registrationEndDate'])) if ts.get('registrationEndDate') else None
+
+        if d.get('longitude'):
             event.geo_lon = d['longitude']
-        if d['latitude']:
+        if d.get('latitude'):
             event.geo_lat = d['latitude']
 
         lang = [
@@ -74,44 +94,168 @@ class XINGEventsImporter:
 
         event.save()
 
+        if ts['commercial'] and ts['salesTax']:
+            self._tax_rule = event.tax_rules.get_or_create(
+                rate=Decimal(ts['salesTax']) / Decimal('100.00'),
+                defaults={
+                    'name': LazyI18nString({'de': 'MwSt', 'en': 'VAT'})
+                }
+            )[0]
+
         # multi-lang not supported?
         event.settings.locales = [language]
         event.settings.locale = language
         event.settings.region = d['country'] or 'DE'
         event.settings.timezone = d['timezone'] or 'Europe/Berlin'
-        event.settings.meta_noindex = not d['publishSearchEngines']
-        event.settings.show_times = not d['hideTime']
-        if d['organizerEmail']:
+        event.settings.meta_noindex = not d.get('publishSearchEngines')
+        event.settings.show_times = not d.get('hideTime')
+        event.settings.show_quota_left = bool(ts.get('showAvailableTickets'))
+
+        if not ts.get('ticketsEditable') or not ts.get('ticketsTransferable'):
+            event.settings.last_order_modification_date = tz.localize(datetime.datetime(1999, 1, 1, 0, 0, 0))
+
+        if d.get('organizerEmail'):
             event.settings.contact_mail = d['organizerEmail']
-        if d['description']:
+
+        if d.get('description'):
             event.settings.frontpage_text = LazyI18nString({language: self._clean_html(d['description'])})
 
-        if d['internalReference']:
+        if d.get('internalReference'):
             prop_ref = self.organizer.meta_properties.get_or_create(name="Interne Referenz")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['internalReference']))
 
-        if d['onlineType']:
+        if d.get('onlineType'):
             prop_ref = self.organizer.meta_properties.get_or_create(name="Online-Typ")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['onlineType']))
 
-        if d['accessibility']:
+        if d.get('accessibility'):
             prop_ref = self.organizer.meta_properties.get_or_create(name="Barrierefreiheit")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['accessibility']))
 
-        if d['type']:
+        if d.get('type'):
             prop_ref = self.organizer.meta_properties.get_or_create(name="Typ")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['type'].replace('EVENT_TYPE_', '')))
 
-        if d['twitterHashtag']:
+        if d.get('twitterHashtag'):
             prop_ref = self.organizer.meta_properties.get_or_create(name="Twitter-Hashtag")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['twitterHashtag']))
 
-        if d['banner']:
+        if d.get('banner'):
             event.settings.logo_image = self._clone_file(event, d['banner'], 'logo_image')
             event.settings.logo_image_large = True
-        elif d['logo']:
+        elif d.get('logo'):
             event.settings.logo_image = self._clone_file(event, d['logo'], 'logo_image')
             event.settings.logo_image_large = True
 
+        if ts.get('vatId'):
+            event.settings.invoice_address_from_vat_id = ts['vatId']
+
+        confirmation_texts = LazyI18nStringList()
+        if ts['ownTermsAndConditions']:
+            url = ts['ownTermsAndConditions']
+            if 'xing-events.com/' in ts['ownTermsAndConditions']:
+                url = urljoin(
+                    settings.SITE_URL,
+                    urljoin(
+                        settings.MEDIA_URL,
+                        default_storage.url(self._clone_file(event, ts['ownTermsAndConditions'], 'terms').name)
+                    )
+                )
+            confirmation_texts.append(LazyI18nString({
+                'de': f'Ich akzeptiere die [AGB]({url}) von {d["organisatorDisplayName"]}',
+                'en': f'I accept the [terms and conditions]({url}) of {d["organisatorDisplayName"]}',
+            }))
+        if ts['ownPrivacyPolicy']:
+            url = ts['ownPrivacyPolicy']
+            if 'xing-events.com/' in ts['ownPrivacyPolicy']:
+                url = urljoin(
+                    settings.SITE_URL,
+                    urljoin(
+                        settings.MEDIA_URL,
+                        default_storage.url(self._clone_file(event, ts['ownPrivacyPolicy'], 'privacy').name)
+                    )
+                )
+
+            confirmation_texts.append(LazyI18nString({
+                'de': f'Ich habe die [Datenschutzerklärung]({url}) von {d["organisatorDisplayName"]} zur Kenntnis genommen',
+                'en': f'I have read the [privacy policy]({url}) of {d["organisatorDisplayName"]}',
+            }))
+        if confirmation_texts:
+            event.settings.confirm_texts = confirmation_texts
+
         # todo: onlineUrl → digitalcontent?
-        # todo: schedule → pages?
+        # ticketShop.closed?
+
+        self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
+
+    def _import_ticket_categories(self, event, language, event_id, global_quota_limit):
+        prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
+        prop_comment = event.item_meta_properties.get_or_create(name="Kommentar")[0]
+        item_category = event.categories.get_or_create(
+            internal_name='Tickets', defaults={
+                'name': LazyI18nString({'en': 'Tickets', 'de': 'Tickets'})
+            }
+        )[0]
+        all_channels = list(get_all_sales_channels().keys())
+
+        category_ids = self.client._get(f'event/{event_id}/ticketCategories')['ticketCategories']
+        items = []
+        for i, category_id in enumerate(category_ids):
+            cat = self.client._get(f'ticketCategory/{category_id}')['ticketCategory']
+
+            try:
+                item = ItemMetaValue.objects.get(property=prop_import_id, value=str(category_id), item__event=event).item
+                creating = False
+            except ItemMetaValue.DoesNotExist:
+                item = Item(event=event)
+                creating = True
+
+            item.name = LazyI18nString({language: cat['name']})
+            item.admission = True
+            item.category = item_category
+            item.position = i
+
+            if cat.get('ticketDescription'):
+                item.description = LazyI18nString({language: self._clean_html(cat['ticketDescription'])})
+
+            if cat.get('internalReference'):
+                item.internal_name = cat['internalReference']
+
+            if cat.get('price') is not None:
+                item.default_price = self._money_conversion(event.currency, cat['price'])
+
+            item.tax_rule = self._tax_rule
+            item.sales_channels = all_channels
+            item.available_from = event.timezone.localize(parse(cat['saleStart'])) if cat.get('saleStart') else None
+            item.available_until = event.timezone.localize(parse(cat['saleEnd'])) if cat.get('saleEnd') else None
+            item.min_per_order = cat.get('minSell') or 0
+            item.max_per_order = cat.get('maxSell') or None
+            item.active = cat['active']
+
+            item.save()
+            if creating:
+                item.meta_values.create(property=prop_import_id, value=str(category_id))
+
+            if cat.get('comment'):
+                item.meta_values.update_or_create(property=prop_comment, defaults=dict(value=cat['comment']))
+
+            quota = event.quotas.get_or_create(name=cat.get('internalReference') or cat['name'])[0]
+            quota.size = cat['available'] + cat['sold']  # todo: also + cat['reservedCount ?
+            quota.save()
+            quota.items.add(item)
+
+            items.append(item)
+
+        total_quota = event.quotas.get_or_create(name="Gesamt-Teilnehmermenge")[0]
+        total_quota.size = global_quota_limit
+        total_quota.save()
+        total_quota.items.add(*items)
+
+
+
+        """
+
+ticketsShop
+collectUserData 	Boolean 	RW-
+	Should user data be collected in the ticketshop? 	Default: true
+        """
