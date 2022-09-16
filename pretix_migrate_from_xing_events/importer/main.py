@@ -15,7 +15,7 @@ from django.utils.crypto import get_random_string
 from i18nfield.strings import LazyI18nString
 
 from pretix.base.channels import get_all_sales_channels
-from pretix.base.models import Event, ItemMetaValue, Item, ItemVariation
+from pretix.base.models import Event, ItemMetaValue, Item, ItemVariation, Question
 from pretix.base.settings import LazyI18nStringList
 from pretix.base.templatetags.rich_text import ALLOWED_TAGS, ALLOWED_ATTRIBUTES, ALLOWED_PROTOCOLS
 from .client import XINGEventsAPIClient
@@ -189,6 +189,7 @@ class XINGEventsImporter:
 
         admission_items = self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
         self._import_product_definitions(event, language, event_id, admission_items)
+        self._import_userdata_definitions(event, language, event_id, admission_items)
 
     def _import_ticket_categories(self, event, language, event_id, global_quota_limit):
         prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
@@ -288,7 +289,8 @@ class XINGEventsImporter:
             if len(pd['options']) > 1 or pd['options'][0]['productDefinitionOptionName'] == pd['title']:
                 item.name = LazyI18nString({language: pd['title']})
             else:
-                item.name = LazyI18nString({language: pd['title'] + ' ' + pd['options'][0]['productDefinitionOptionName']})
+                item.name = LazyI18nString(
+                    {language: pd['title'] + ' ' + pd['options'][0]['productDefinitionOptionName']})
             item.admission = False
             item.category = item_category
             item.position = i
@@ -301,7 +303,6 @@ class XINGEventsImporter:
             if creating:
                 item.meta_values.create(property=prop_import_id, value=str(pd_id))
 
-            variations = []
             if len(pd['options']) > 1:
                 for pdo in pd['options']:
                     try:
@@ -313,7 +314,8 @@ class XINGEventsImporter:
                     var.default_price = self._money_conversion(event.currency, pdo.get('price', 0))
                     var.save()
 
-                    quota = event.quotas.get_or_create(name=str(item.name) + ' ' + pdo['productDefinitionOptionName'])[0]
+                    quota = event.quotas.get_or_create(name=str(item.name) + ' ' + pdo['productDefinitionOptionName'])[
+                        0]
                     quota.size = pdo.get('available')  # todo: add already sold ones
                     quota.save()
                     quota.items.add(item)
@@ -334,6 +336,64 @@ class XINGEventsImporter:
                         max_count=len(addon_items),
                     )
                 )
+
+    def _import_userdata_definitions(self, event, language, event_id, admission_items):
+        userdatas = self.client._get(f'event/{event_id}/userData')['userData']
+
+        for ud in userdatas:
+            try:
+                question = event.questions.get(identifier=f'xing:{ud["fieldId"]}')
+            except Question.DoesNotExist:
+                question = Question(event=event, identifier=f'xing:{ud["fieldId"]}')
+
+            if ud['type'] in ("string", "email", "url"):
+                question.type = Question.TYPE_STRING
+            elif ud['type'] == "textarea":
+                question.type = Question.TYPE_TEXT
+            elif ud['type'] in ("date", "birthday"):
+                question.type = Question.TYPE_DATE
+            elif ud['type'] == "datetime":
+                question.type = Question.TYPE_DATETIME
+            elif ud['type'] == "radio":
+                question.type = Question.TYPE_CHOICE
+            elif ud['type'] == "checkbox":
+                question.type = Question.TYPE_BOOLEAN
+            elif ud['type'] == "dropdown":
+                question.type = Question.TYPE_CHOICE
+            elif ud['type'] == "photo":
+                question.type = Question.TYPE_FILE
+                question.valid_file_portrait = True
+            elif ud['type'] == "file":
+                question.type = Question.TYPE_FILE
+            elif ud['type'] == "gender":
+                question.type = Question.TYPE_CHOICE
+            elif ud['type'] == "address":
+                question.type = Question.TYPE_TEXT
+            elif ud['type'] == "phone":
+                question.type = Question.TYPE_PHONENUMBER
+            elif ud['type'] == "country":
+                question.type = Question.TYPE_COUNTRYCODE
+            elif ud['type'] in ("separator", "product"):
+                continue
+            else:
+                question.type = Question.TYPE_STRING
+
+            question.question = ud['title']
+            question.required = ud['required']
+            question.position = ud.get('orderNumber', 1)
+            question.save()
+            question.items.set(admission_items)
+
+            if ud['type'] == "gender":
+                question.options.update_or_create(identifier='xing:gender:m', defaults={'answer': LazyI18nString({'en': 'male', 'de': 'männlich'})})
+                question.options.update_or_create(identifier='xing:gender:f', defaults={'answer': LazyI18nString({'en': 'female', 'de': 'weiblich'})})
+                question.options.update_or_create(identifier='xing:gender:x', defaults={'answer': LazyI18nString({'en': 'other', 'de': 'sonstiges'})})
+            elif ud['type'] in ('radio', 'dropdown'):
+                for udo in ud['options']:
+                    question.options.update_or_create(
+                        identifier=f'xing:{udo["userDataOptionKey"]}',
+                        defaults={'answer': LazyI18nString({language: udo["userDataOptionName"]})}
+                    )
 
         """
 
