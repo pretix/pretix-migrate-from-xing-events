@@ -1,4 +1,5 @@
 import datetime
+import json
 from decimal import Decimal
 from urllib.parse import urljoin
 
@@ -14,7 +15,7 @@ from django.utils.crypto import get_random_string
 from i18nfield.strings import LazyI18nString
 
 from pretix.base.channels import get_all_sales_channels
-from pretix.base.models import Event, ItemMetaValue, Item
+from pretix.base.models import Event, ItemMetaValue, Item, ItemVariation
 from pretix.base.settings import LazyI18nStringList
 from pretix.base.templatetags.rich_text import ALLOWED_TAGS, ALLOWED_ATTRIBUTES, ALLOWED_PROTOCOLS
 from .client import XINGEventsAPIClient
@@ -186,7 +187,8 @@ class XINGEventsImporter:
         # todo: onlineUrl → digitalcontent?
         # ticketShop.closed?
 
-        self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
+        admission_items = self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
+        self._import_product_definitions(event, language, event_id, admission_items)
 
     def _import_ticket_categories(self, event, language, event_id, global_quota_limit):
         prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
@@ -250,8 +252,88 @@ class XINGEventsImporter:
         total_quota.size = global_quota_limit
         total_quota.save()
         total_quota.items.add(*items)
+        return items
 
+    def _import_product_definitions(self, event, language, event_id, admission_items):
+        prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Produkt")[0]
+        all_channels = list(get_all_sales_channels().keys())
+        addon_category = None
 
+        pd_ids = self.client._get(f'event/{event_id}/productDefinitions')['productDefinitions']
+        addon_items = []
+        for i, pd_id in enumerate(pd_ids):
+            pd = self.client._get(f'productDefinition/{pd_id}')['productDefinition']
+            try:
+                item = ItemMetaValue.objects.get(property=prop_import_id, value=str(pd_id),
+                                                 item__event=event).item
+                creating = False
+            except ItemMetaValue.DoesNotExist:
+                item = Item(event=event)
+                creating = True
+
+            if pd['type'] == 'PAYMENT':
+                item_category = event.categories.get_or_create(
+                    internal_name='Zusätze Bestellung', defaults={
+                        'name': LazyI18nString({'en': 'Additional options', 'de': 'Zusätzliche Optionen'})
+                    }
+                )[0]
+            else:
+                item_category = addon_category = event.categories.get_or_create(
+                    internal_name='Zusatzprodukte', is_addon=True, defaults={
+                        'name': LazyI18nString({'en': 'Additional options', 'de': 'Zusätzliche Optionen'})
+                    }
+                )[0]
+                addon_items.append(item)
+
+            if len(pd['options']) > 1 or pd['options'][0]['productDefinitionOptionName'] == pd['title']:
+                item.name = LazyI18nString({language: pd['title']})
+            else:
+                item.name = LazyI18nString({language: pd['title'] + ' ' + pd['options'][0]['productDefinitionOptionName']})
+            item.admission = False
+            item.category = item_category
+            item.position = i
+            item.tax_rule = self._tax_rule
+            item.sales_channels = all_channels
+            item.active = True
+            item.default_price = Decimal('0.00')
+
+            item.save()
+            if creating:
+                item.meta_values.create(property=prop_import_id, value=str(pd_id))
+
+            variations = []
+            if len(pd['options']) > 1:
+                for pdo in pd['options']:
+                    try:
+                        var = item.variations.get(value__icontains=json.dumps(pdo['productDefinitionOptionName']))
+                    except ItemVariation.DoesNotExist:
+                        var = ItemVariation(item=item)
+
+                    var.value = LazyI18nString({language: pdo['productDefinitionOptionName']})
+                    var.default_price = self._money_conversion(event.currency, pdo.get('price', 0))
+                    var.save()
+
+                    quota = event.quotas.get_or_create(name=str(item.name) + ' ' + pdo['productDefinitionOptionName'])[0]
+                    quota.size = pdo.get('available')  # todo: add already sold ones
+                    quota.save()
+                    quota.items.add(item)
+                    quota.variations.add(var)
+
+            else:
+                quota = event.quotas.get_or_create(name=str(item.name))[0]
+                quota.size = pd.get('available')  # todo: add already sold ones
+                quota.save()
+                quota.items.add(item)
+
+        if addon_category:
+            for item in admission_items:
+                item.addons.update_or_create(
+                    addon_category=addon_category,
+                    defaults=dict(
+                        min_count=0,
+                        max_count=len(addon_items),
+                    )
+                )
 
         """
 
@@ -259,3 +341,24 @@ ticketsShop
 collectUserData 	Boolean 	RW-
 	Should user data be collected in the ticketshop? 	Default: true
         """
+
+"""
+    Participants
+    The participant object provides access to read or update every single attendee of an event.
+    Payments
+    A payment represents one purchase/registration in the event's ticket shop/registration form (Creating, updating, reading payments).
+    Tickets
+    During one purchase/registration the buyer may buy one or multiple tickets (Reading of ticket details).
+    Products
+    This object represents a product that was bought by participant.
+    CodeDefinition
+    With this object you can manage the promotion codes of your event.
+    Addresses
+    The address object is used in multiple cases to read or update a specific address (billing address, shipment address or other address requested in the ticket shop).
+    Ticket Types
+    Nested object to update and read the available types of tickets in the shop (e.g. E-Ticket, Paper-Ticket, ...)
+    Payment Types
+    Nested object to update and read the available payment types in the shop (e.g. Credit card, PayPal, ...)
+    UserData
+    Nested object to read additional information of a ticket buyer requested by the organizer during the purchase process
+"""
