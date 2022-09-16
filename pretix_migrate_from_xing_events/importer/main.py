@@ -297,6 +297,7 @@ class XINGEventsImporter:
             item.tax_rule = self._tax_rule
             item.sales_channels = all_channels
             item.active = True
+            item.max_per_order = 1
             item.default_price = Decimal('0.00')
 
             item.save()
