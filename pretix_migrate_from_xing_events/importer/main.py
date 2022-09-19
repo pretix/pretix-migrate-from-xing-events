@@ -1,7 +1,9 @@
 import datetime
 import json
+import os
 from decimal import Decimal
-from urllib.parse import urljoin
+from itertools import chain
+from urllib.parse import urljoin, urlparse
 
 import bleach
 import pytz
@@ -12,10 +14,12 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils.crypto import get_random_string
+from django.utils.timezone import now
 from i18nfield.strings import LazyI18nString
 
 from pretix.base.channels import get_all_sales_channels
-from pretix.base.models import Event, ItemMetaValue, Item, ItemVariation, Question
+from pretix.base.models import Event, ItemMetaValue, Item, ItemVariation, Question, Order, OrderPayment, OrderPosition, \
+    Checkin, QuestionAnswer, InvoiceAddress, OrderFee, Voucher, Quota
 from pretix.base.settings import LazyI18nStringList
 from pretix.base.templatetags.rich_text import ALLOWED_TAGS, ALLOWED_ATTRIBUTES, ALLOWED_PROTOCOLS
 from .client import XINGEventsAPIClient
@@ -27,6 +31,7 @@ class XINGEventsImporter:
         self.client = XINGEventsAPIClient(apikey=apikey)
         self.organizer = organizer
         self._tax_rule = None
+        self.has_product_definitions = False
 
     @transaction.atomic()
     def import_event(self, event_id):
@@ -103,7 +108,13 @@ class XINGEventsImporter:
                 }
             )[0]
 
-        # multi-lang not supported?
+        event.enable_plugin("pretix.plugins.badges")
+        event.save()
+        event.settings.name_scheme = "salutation_given_family"
+        event.settings.attendee_names_asked = True
+        event.settings.attendee_names_required = True
+        event.settings.attendee_emails_asked = True
+        event.settings.attendee_emails_required = True
         event.settings.locales = [language]
         event.settings.locale = language
         event.settings.region = d['country'] or 'DE'
@@ -190,6 +201,13 @@ class XINGEventsImporter:
         admission_items = self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
         self._import_product_definitions(event, language, event_id, admission_items)
         self._import_userdata_definitions(event, language, event_id, admission_items)
+        self._import_code_definitions(event, language, event_id)
+
+        # todo: remove after dev
+        for order in event.orders.filter(testmode=True):
+            order.gracefully_delete()
+
+        self._import_payments(event, language, event_id)
 
     def _import_ticket_categories(self, event, language, event_id, global_quota_limit):
         prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
@@ -263,6 +281,7 @@ class XINGEventsImporter:
         pd_ids = self.client._get(f'event/{event_id}/productDefinitions')['productDefinitions']
         addon_items = []
         for i, pd_id in enumerate(pd_ids):
+            self.has_product_definitions = True
             pd = self.client._get(f'productDefinition/{pd_id}')['productDefinition']
             try:
                 item = ItemMetaValue.objects.get(property=prop_import_id, value=str(pd_id),
@@ -349,7 +368,7 @@ class XINGEventsImporter:
 
             if ud['type'] in ("string", "email", "url"):
                 question.type = Question.TYPE_STRING
-            elif ud['type'] == "textarea":
+            elif ud['type'] in "textarea":
                 question.type = Question.TYPE_TEXT
             elif ud['type'] in ("date", "birthday"):
                 question.type = Question.TYPE_DATE
@@ -374,7 +393,7 @@ class XINGEventsImporter:
                 question.type = Question.TYPE_PHONENUMBER
             elif ud['type'] == "country":
                 question.type = Question.TYPE_COUNTRYCODE
-            elif ud['type'] in ("separator", "product"):
+            elif ud['type'] in ("separator", "product", "agb", "privacy"):
                 continue
             else:
                 question.type = Question.TYPE_STRING
@@ -396,30 +415,292 @@ class XINGEventsImporter:
                         defaults={'answer': LazyI18nString({language: udo["userDataOptionName"]})}
                     )
 
-        """
+    def _import_payments(self, event, language, event_id):
+        ids = self.client._get(f'event/{event_id}/payments')['payments']
+        for payment_id in ids:
+            self._import_payment(event, language, event_id, payment_id)
 
-ticketsShop
-collectUserData 	Boolean 	RW-
-	Should user data be collected in the ticketshop? 	Default: true
-        """
+    def _import_payment(self, event, language, event_id, payment_id):
+        payment = self.client._get(f'payment/{payment_id}')['payment']
 
-"""
-    Participants
-    The participant object provides access to read or update every single attendee of an event.
-    Payments
-    A payment represents one purchase/registration in the event's ticket shop/registration form (Creating, updating, reading payments).
-    Tickets
-    During one purchase/registration the buyer may buy one or multiple tickets (Reading of ticket details).
-    Products
-    This object represents a product that was bought by participant.
-    CodeDefinition
-    With this object you can manage the promotion codes of your event.
-    Addresses
-    The address object is used in multiple cases to read or update a specific address (billing address, shipment address or other address requested in the ticket shop).
-    Ticket Types
-    Nested object to update and read the available types of tickets in the shop (e.g. E-Ticket, Paper-Ticket, ...)
-    Payment Types
-    Nested object to update and read the available payment types in the shop (e.g. Credit card, PayPal, ...)
-    UserData
-    Nested object to read additional information of a ticket buyer requested by the organizer during the purchase process
-"""
+        order_code = payment["identifier"][-15:]
+
+        if Order.objects.filter(code=order_code).exists():
+            return
+
+        payment_products = self.client._get(f'payment/{payment_id}/products')['products']
+        ticket_ids = self.client._get(f'payment/{payment_id}/tickets')['tickets']
+        tickets = [self.client._get(f'ticket/{ticket_id}')['ticket'] for ticket_id in ticket_ids]
+        prop_import_id_ticket = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
+        prop_import_id_product = event.item_meta_properties.get_or_create(name="XING-Events-Produkt")[0]
+
+        total = self._money_conversion(event.currency, payment["amount"])
+        order = Order(
+            code=order_code,
+            event=event,
+            testmode=event.testmode,
+            datetime=event.timezone.localize(parse(payment["creationTime"])),
+            email_known_to_work=payment["doubleOptIn"] not in ("FALSE", "WAITING"),
+            meta_info=json.dumps({
+                "xing_import": {
+                    "distributionChannel": payment.get("distributionChannel"),
+                    "applicationData": payment.get("applicationData"),
+                    "type": payment.get("type"),
+                    "paymentAuthLoginType": payment.get("paymentAuthLoginType"),
+                    "paymentAuthProfileUrl": payment.get("paymentAuthProfileUrl"),
+                    "paymentAuthProfileId": payment.get("paymentAuthProfileId"),
+                }
+            }),
+            locale=payment.get("language", language),
+            status={
+                "new": Order.STATUS_PENDING,
+                "authorized": Order.STATUS_PENDING,
+                "paid": Order.STATUS_PAID,
+                "disbursed": Order.STATUS_PAID,
+                "cancelled": Order.STATUS_CANCELED,
+            }[payment["status"]],
+            total=total,
+        )
+
+        order.save()
+        ia = InvoiceAddress(order=order)
+
+        positions = []
+        fees = []
+
+        for ticket in tickets:
+            ticket_products = self.client._get(f'ticket/{ticket["id"]}/products')['products']
+            participant = self.client._get(f'participant/{ticket["participantId"]}')['participant']
+
+            if participant["status"] == "com.amiando.participant.status.onHold" and order.status != Order.STATUS_CANCELED:
+                order.require_approval = True
+                order.status = Order.STATUS_PENDING
+                order.save()
+
+            op = OrderPosition(order=order, positionid=len(positions) + 1)
+            op.item = ItemMetaValue.objects.get(
+                property=prop_import_id_ticket,
+                value=str(ticket["ticketCategoryIds"][0]),
+                item__event=event,
+            ).item
+            op.secret = ticket["identifier"]
+            op.pseudonymization_id = ticket["displayIdentifier"]
+            op.attendee_name_parts = {
+                "_scheme": "salutation_given_family",
+                "saludation": {
+                    0: 'Mr',
+                    1: 'Ms',
+                    -1: 'Mx',
+                    None: '',
+                }[ticket.get("salutation")],
+                "given_name": ticket.get("firstName") or "",
+                "familyName": ticket.get("lastName") or "",
+            }
+            op.attendee_email = ticket.get("email")
+            op.company = ticket.get("company")
+
+            op.price = self._money_conversion(event.currency, ticket.get("originalPrice", 0)) - self._money_conversion(event.currency, ticket.get("discountAmount", 0))
+
+            if ticket.get("cancelled") or participant["status"] in ("com.amiando.participant.status.cancelled", "com.amiando.participant.status.declined"):
+                op.canceled = True  # todo: test this
+
+            op.save()
+            positions.append(op)
+
+            if participant.get("referenceNumber") and not ia.internal_reference:
+                ia.internal_reference = participant["referenceNumber"]
+                ia.save()
+            if participant.get("buyerAddress") and not ia.city:
+                ia.name_parts = {
+                    '_scheme': 'salutation_given_family',
+                    'salutation': '',
+                    'given_name': participant['buyerAddress'].get('firstName') or '',
+                    'family_name': participant['buyerAddress'].get('lastName') or '',
+                }
+                ia.company = participant['buyerAddress'].get('company') or ''
+                ia.street = participant['buyerAddress'].get('street') or ''
+                ia.zipcode = participant['buyerAddress'].get('zipCode') or ''
+                ia.city = participant['buyerAddress'].get('city') or ''
+                ia.country = participant['buyerAddress'].get('country') or 'DE'
+                ia.vat_id = participant['buyerAddress'].get('vatId') or ''
+                ia.save()
+                if participant['buyerAddress'].get('email') and not order.email:
+                    order.email = participant['buyerAddress'].get('email')
+                    order.save()
+                if participant['buyerAddress'].get('telephone') and not order.phone:
+                    order.phone = participant['buyerAddress'].get('telephone')
+                    order.save()
+            elif not order.email:
+                order.email = participant.get("email")
+                order.save()
+
+            for ud in chain(ticket.get("userData", []), payment.get("userData", [])):
+                if ud['type'] in ("separator", "product", "unknown", "agb", "privacy"):
+                    continue
+                question = event.questions.get(identifier=f'xing:{ud["fieldId"]}')
+                qa = QuestionAnswer(question=question, orderposition=op)
+                if ud['type'] in ("date", "birthday"):
+                    qa.answer = str(parse(ud["value"]).date())
+                elif ud['type'] == "datetime":
+                    qa.answer = str(event.timezone.localize(parse(ud["value"])))
+                elif ud['type'] in ("radio", "dropdown"):
+                    opt = question.options.get(identifier=f'xing:{ud["userDataOptionKey"]}')
+                    qa.answer = str(opt.answer)
+                    qa.save()
+                    qa.options.set([opt])
+                elif ud['type'] == "checkbox":
+                    qa.answer = str(ud['value'])
+                elif ud['type'] in ("photo", "file"):
+                    r = requests.get(ud['value'])
+                    r.raise_for_status()
+                    value = ContentFile(r.content)
+                    qa.save()
+                    qa.file.save(os.path.basename(urlparse(ud["value"]).path), value, save=False)
+                    qa.answer = 'file://' + qa.file.name
+                elif ud['type'] == "address":
+                    qa.answer = (
+                        f"{ud['value'].get('firstName', '')} {ud['value'].get('lastName', '')}\n"
+                        f"{ud['value'].get('street', '')}\n" 
+                        f"{ud['value'].get('zipCode', '')} {ud['value'].get('city', '')}\n"
+                        f"{ud['value'].get('country', '')}\n" 
+                        f"{ud['value'].get('email', '')}"
+                    ).strip()
+                else:
+                    # if ud['type'] in ("string", "email", "url", "textarea", "gender", "phone", "country"):
+                    qa.answer = str(ud["value"])
+                qa.save()
+
+            if ticket.get("checked"):
+                Checkin.objects.create(
+                    position=op,
+                    datetime=event.timezone.localize(parse(ticket.get("lastChecked"))),
+                    list=event.checkin_lists.get_or_create(name="Default")[0]
+                )
+
+            for prod in ticket_products:
+                opa = OrderPosition(order=order, addon_to=op, canceled=op.canceled, positionid=len(positions) + 1)
+                opa.item = ItemMetaValue.objects.get(
+                    property=prop_import_id_product,
+                    value=str(prod["productCategoryId"]),
+                    item__event=event,
+                ).item
+                opa.variation = opa.item.variations.get(value__icontains=json.dumps(prod['productCategoryOptionName'])) if opa.item.variations.exists() else None
+                opa.price = opa.variation.default_price if opa.variation else opa.item.default_price
+                opa.save()
+                positions.append(opa)
+
+                if prod.get("checked"):
+                    Checkin.objects.create(
+                        position=opa,
+                        list=event.checkin_lists.get_or_create(name="Default")[0]
+                    )
+
+        for prod in payment_products:
+            opp = OrderPosition(order=order, positionid=len(positions) + 1)
+            opp.item = ItemMetaValue.objects.get(
+                property=prop_import_id_product,
+                value=str(prod["productCategoryId"]),
+                item__event=event,
+            ).item
+            opp.variation = opp.item.variations.get(value__icontains=json.dumps(
+                prod['productCategoryOptionName'])) if opp.item.variations.exists() else None
+            opp.price = opp.variation.default_price if opp.variation else opa.item.default_price
+            opp.save()
+            positions.append(opp)
+
+            if prod.get("checked"):
+                Checkin.objects.create(
+                    position=opp,
+                    list=event.checkin_lists.get_or_create(name="Default")[0]
+                )
+
+        subtotal = sum(op.price for op in positions) + sum(f.value for f in fees)
+        if subtotal != total:
+            f = OrderFee(order=order)
+            f.fee_type = OrderFee.FEE_TYPE_OTHER
+            f.description = 'Differenz zu XING-Buchung'
+            f.value = total - subtotal
+            f.tax_rule = event.tax_rules.get()
+            f.save()
+            fees.append(f)
+        order.total = sum(op.price for op in positions if not op.canceled) + sum(f.value for f in fees if not f.canceled)
+        order.save()
+
+        order.create_transactions(is_new=True, positions=positions, fees=fees)
+
+        if order.status == Order.STATUS_PAID:
+            order.payments.create(
+                amount=order.total, provider='manual', state=OrderPayment.PAYMENT_STATE_CONFIRMED,
+                payment_date=now()
+            )
+
+    def _import_code_definitions(self, event, language, event_id):
+        prop_import_id_ticket = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
+        code_def_ids = self.client._get(f'event/{event_id}/codeDefinitions')['codeDefinitions']
+        for code_def_id in code_def_ids:
+            code_def = self.client._get(f'codeDefinition/{code_def_id}')['codeDefinition']
+
+            valid_until = event.timezone.localize(parse(code_def['endDate'])) if code_def.get('endDate') else None
+            if code_def.get('categories', []):
+                if len(code_def['categories']) == 1:
+                    item = ItemMetaValue.objects.get(
+                        property=prop_import_id_ticket,
+                        value=str(code_def["categories"][0]),
+                        item__event=event,
+                    ).item
+                    quota = None
+                    if code_def['type'] == 'DISCOUNTCODE_TYPE_CATEGORY':
+                        item.hide_without_voucher = True
+                        item.save()
+                else:
+                    q = event.quotas.get_or_create(size=None, name=f'Voucher: {code_def["name"]}')[0]
+                    items = [
+                        mv.item for mv in ItemMetaValue.objects.get(
+                            property=prop_import_id_ticket,
+                            value__in=[str(c) for c in code_def["categories"]],
+                            item__event=event,
+                        )
+                    ]
+                    q.items.set(items)
+                    quota = q
+                    item = None
+                    if code_def['type'] == 'DISCOUNTCODE_TYPE_CATEGORY':
+                        for i in items:
+                            i.hide_without_voucher = True
+                            i.save()
+
+            page_num = 0
+            while True:
+                r_codes = self.client._get(f'codeDefinition/{code_def_id}/codes?page={page_num}')
+
+                for code in r_codes['codes']:
+                    try:
+                        v = event.vouchers.get(code=code['code'])
+                    except Voucher.DoesNotExist:
+                        v = Voucher(event=event, code=code['code'])
+
+                    v.redeemed = code['used']
+                    v.tag = code_def['name']
+                    v.item = item
+                    v.quota = quota
+                    v.max_usages = code_def.get('validCount') or 10_000_000
+                    v.valid_until = valid_until
+
+                    if code_def['type'] == 'DISCOUNTCODE_TYPE_PERCENT':
+                        v.price_mode = 'percent'
+                        v.value = Decimal(code_def['value']) / Decimal('100.00')
+                        v.show_hidden_items = False
+                    elif code_def['type'] == 'DISCOUNTCODE_TYPE_ABSOLUTE':
+                        v.price_mode = 'subtract'
+                        v.value = self._money_conversion(event.currency, code_def['value'])
+                        v.show_hidden_items = False
+                    elif code_def['type'] == 'DISCOUNTCODE_TYPE_CATEGORY':
+                        v.price_mode = 'none'
+                        v.show_hidden_items = True
+
+                    v.save()
+
+                if r_codes['currentPage'] == r_codes['lastPage']:
+                    break
+                else:
+                    page_num += 1
