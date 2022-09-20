@@ -362,9 +362,9 @@ class XINGEventsImporter:
 
         for ud in userdatas:
             try:
-                question = event.questions.get(identifier=f'xing:{ud["fieldId"]}')
+                question = event.questions.get(identifier=f'xing-{ud["fieldId"]}')
             except Question.DoesNotExist:
-                question = Question(event=event, identifier=f'xing:{ud["fieldId"]}')
+                question = Question(event=event, identifier=f'xing-{ud["fieldId"]}')
 
             if ud['type'] in ("string", "email", "url"):
                 question.type = Question.TYPE_STRING
@@ -405,13 +405,13 @@ class XINGEventsImporter:
             question.items.set(admission_items)
 
             if ud['type'] == "gender":
-                question.options.update_or_create(identifier='xing:gender:m', defaults={'answer': LazyI18nString({'en': 'male', 'de': 'männlich'})})
-                question.options.update_or_create(identifier='xing:gender:f', defaults={'answer': LazyI18nString({'en': 'female', 'de': 'weiblich'})})
-                question.options.update_or_create(identifier='xing:gender:x', defaults={'answer': LazyI18nString({'en': 'other', 'de': 'sonstiges'})})
+                question.options.update_or_create(identifier='xing-gender-m', defaults={'answer': LazyI18nString({'en': 'male', 'de': 'männlich'})})
+                question.options.update_or_create(identifier='xing-gender-f', defaults={'answer': LazyI18nString({'en': 'female', 'de': 'weiblich'})})
+                question.options.update_or_create(identifier='xing-gender-x', defaults={'answer': LazyI18nString({'en': 'other', 'de': 'sonstiges'})})
             elif ud['type'] in ('radio', 'dropdown'):
                 for udo in ud['options']:
                     question.options.update_or_create(
-                        identifier=f'xing:{udo["userDataOptionKey"]}',
+                        identifier=f'xing-{udo["userDataOptionKey"]}',
                         defaults={'answer': LazyI18nString({language: udo["userDataOptionName"]})}
                     )
 
@@ -537,14 +537,14 @@ class XINGEventsImporter:
             for ud in chain(ticket.get("userData", []), payment.get("userData", [])):
                 if ud['type'] in ("separator", "product", "unknown", "agb", "privacy"):
                     continue
-                question = event.questions.get(identifier=f'xing:{ud["fieldId"]}')
+                question = event.questions.get(identifier=f'xing-{ud["fieldId"]}')
                 qa = QuestionAnswer(question=question, orderposition=op)
                 if ud['type'] in ("date", "birthday"):
                     qa.answer = str(parse(ud["value"]).date())
                 elif ud['type'] == "datetime":
                     qa.answer = str(event.timezone.localize(parse(ud["value"])))
                 elif ud['type'] in ("radio", "dropdown"):
-                    opt = question.options.get(identifier=f'xing:{ud["userDataOptionKey"]}')
+                    opt = question.options.get(identifier=f'xing-{ud["userDataOptionKey"]}')
                     qa.answer = str(opt.answer)
                     qa.save()
                     qa.options.set([opt])
