@@ -133,11 +133,11 @@ class XINGEventsImporter:
             event.settings.frontpage_text = LazyI18nString({language: self._clean_html(d['description'])})
 
         if d.get('internalReference'):
-            prop_ref = self.organizer.meta_properties.get_or_create(name="Interne Referenz")[0]
+            prop_ref = self.organizer.meta_properties.get_or_create(name="InterneReferenz")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['internalReference']))
 
         if d.get('onlineType'):
-            prop_ref = self.organizer.meta_properties.get_or_create(name="Online-Typ")[0]
+            prop_ref = self.organizer.meta_properties.get_or_create(name="OnlineTyp")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['onlineType']))
 
         if d.get('accessibility'):
@@ -149,7 +149,7 @@ class XINGEventsImporter:
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['type'].replace('EVENT_TYPE_', '')))
 
         if d.get('twitterHashtag'):
-            prop_ref = self.organizer.meta_properties.get_or_create(name="Twitter-Hashtag")[0]
+            prop_ref = self.organizer.meta_properties.get_or_create(name="TwitterHashtag")[0]
             event.meta_values.update_or_create(property=prop_ref, defaults=dict(value=d['twitterHashtag']))
 
         if d.get('banner'):
@@ -210,7 +210,7 @@ class XINGEventsImporter:
         self._import_payments(event, language, event_id)
 
     def _import_ticket_categories(self, event, language, event_id, global_quota_limit):
-        prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
+        prop_import_id = event.item_meta_properties.get_or_create(name="XINGEventsTicketkategorie")[0]
         prop_comment = event.item_meta_properties.get_or_create(name="Kommentar")[0]
         item_category = event.categories.get_or_create(
             internal_name='Tickets', defaults={
@@ -274,7 +274,7 @@ class XINGEventsImporter:
         return items
 
     def _import_product_definitions(self, event, language, event_id, admission_items):
-        prop_import_id = event.item_meta_properties.get_or_create(name="XING-Events-Produkt")[0]
+        prop_import_id = event.item_meta_properties.get_or_create(name="XINGEventsProdukt")[0]
         all_channels = list(get_all_sales_channels().keys())
         addon_category = None
 
@@ -431,8 +431,8 @@ class XINGEventsImporter:
         payment_products = self.client._get(f'payment/{payment_id}/products')['products']
         ticket_ids = self.client._get(f'payment/{payment_id}/tickets')['tickets']
         tickets = [self.client._get(f'ticket/{ticket_id}')['ticket'] for ticket_id in ticket_ids]
-        prop_import_id_ticket = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
-        prop_import_id_product = event.item_meta_properties.get_or_create(name="XING-Events-Produkt")[0]
+        prop_import_id_ticket = event.item_meta_properties.get_or_create(name="XINGEventsTicketkategorie")[0]
+        prop_import_id_product = event.item_meta_properties.get_or_create(name="XINGEventsProdukt")[0]
 
         total = self._money_conversion(event.currency, payment["amount"])
         order = Order(
@@ -635,7 +635,7 @@ class XINGEventsImporter:
             )
 
     def _import_code_definitions(self, event, language, event_id):
-        prop_import_id_ticket = event.item_meta_properties.get_or_create(name="XING-Events-Ticketkategorie")[0]
+        prop_import_id_ticket = event.item_meta_properties.get_or_create(name="XINGEventsTicketkategorie")[0]
         code_def_ids = self.client._get(f'event/{event_id}/codeDefinitions')['codeDefinitions']
         for code_def_id in code_def_ids:
             code_def = self.client._get(f'codeDefinition/{code_def_id}')['codeDefinition']
