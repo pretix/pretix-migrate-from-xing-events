@@ -12,9 +12,10 @@ from dateutil.parser import parse
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils.crypto import get_random_string
 from django.utils.timezone import now
+from django_scopes import scopes_disabled
 from i18nfield.strings import LazyI18nString
 
 from pretix.base.channels import get_all_sales_channels
@@ -34,8 +35,8 @@ class XINGEventsImporter:
         self.has_product_definitions = False
 
     @transaction.atomic()
-    def import_event(self, event_id):
-        self._import_event_data(event_id)
+    def import_event(self, event_id, with_vouchers, with_orders):
+        return self._import_event_data(event_id, with_vouchers, with_orders)
 
     def _clean_html(self, data):
         return bleach.clean(
@@ -64,7 +65,7 @@ class XINGEventsImporter:
         else:
             return Decimal(int_val) / Decimal('100.00')
 
-    def _import_event_data(self, event_id):
+    def _import_event_data(self, event_id, with_vouchers, with_orders):
         d = self.client._get(f'event/{event_id}')['event']
         ts = self.client._get(f'event/{event_id}/ticketShop')['ticketShop']
 
@@ -201,13 +202,13 @@ class XINGEventsImporter:
         admission_items = self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
         self._import_product_definitions(event, language, event_id, admission_items)
         self._import_userdata_definitions(event, language, event_id, admission_items)
-        self._import_code_definitions(event, language, event_id)
 
-        # todo: remove after dev
-        for order in event.orders.filter(testmode=True):
-            order.gracefully_delete()
+        if with_vouchers:
+            self._import_code_definitions(event, language, event_id)
 
-        self._import_payments(event, language, event_id)
+        if with_orders:
+            self._import_payments(event, language, event_id)
+        return event
 
     def _import_ticket_categories(self, event, language, event_id, global_quota_limit):
         prop_import_id = event.item_meta_properties.get_or_create(name="XINGEventsTicketkategorie")[0]
@@ -423,7 +424,10 @@ class XINGEventsImporter:
     def _import_payment(self, event, language, event_id, payment_id):
         payment = self.client._get(f'payment/{payment_id}')['payment']
 
-        order_code = payment["identifier"][-15:]
+        if "identifier" in payment:
+            order_code = payment["identifier"][-15:]
+        else:
+            order_code = f"X{payment_id}"
 
         if Order.objects.filter(code=order_code).exists():
             return
@@ -463,6 +467,14 @@ class XINGEventsImporter:
         )
 
         order.save()
+
+        try:
+            # Don't charge pretix.eu fees, XING already charged fees
+            from pretixeu.billing.models import FeeBlocker
+            FeeBlocker.objects.create(order=order)
+        except ImportError:
+            pass
+
         ia = InvoiceAddress(order=order)
 
         positions = []
@@ -484,7 +496,11 @@ class XINGEventsImporter:
                 item__event=event,
             ).item
             op.secret = ticket["identifier"]
-            op.pseudonymization_id = ticket["displayIdentifier"]
+            with scopes_disabled():
+                if OrderPosition.all.filter(pseudonymization_id=ticket["displayIdentifier"]).exists():
+                    op.pseudonymization_id = ticket["displayIdentifier"] + f'-{self.organizer.slug}'
+                else:
+                    op.pseudonymization_id = ticket["displayIdentifier"]
             op.attendee_name_parts = {
                 "_scheme": "salutation_given_family",
                 "saludation": {

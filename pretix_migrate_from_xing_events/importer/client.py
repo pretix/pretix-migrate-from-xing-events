@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 import requests
 
 
-class APIError(Exception):
+class APIError(IOError):
     pass
 
 
@@ -18,10 +18,11 @@ class XINGEventsAPIClient:
             'Authorization': f'ApiKey {self.apikey}'
         }
 
-    def _get(self, path):
+    def _get(self, path, **kwargs):
         r = requests.get(
             urljoin(self.base_url, path),
-            headers=self._headers()
+            headers=self._headers(),
+            **kwargs
         )
         r.raise_for_status()
         d = r.json()
