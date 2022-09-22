@@ -1,39 +1,42 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
+"Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-09-22 17:32+0200\n"
-"PO-Revision-Date: \n"
-"Last-Translator: pretix\n"
-"Language-Team: \n"
-"Language: de\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.1\n"
 
 #: pretix_migrate_from_xing_events/__init__.py:16
 msgid "Migration Assistant from XING Events"
-msgstr "Migrations-Assistent für XING-Events-Veranstaltungen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/__init__.py:18
 msgid "Assists migrating from XING Events to pretix"
-msgstr "Hilft Ihnen bei der Migration von XING Events zu pretix"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/signals.py:14
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/index.html:5
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:5
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:5
 msgid "Migrate from XING Events"
-msgstr "Migration von XING Events"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/index.html:8
 msgid ""
 "This tool helps you to migrate your existing data from XING Events to pretix "
 "to save you work in switching over."
 msgstr ""
-"Dieses Werkzeug hilft Ihnen, Ihre bestehenden Daten von XING Events zu "
-"pretix mitzunehmen um Arbeit beim Wechsel zu ersparen."
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/index.html:14
 msgid ""
@@ -44,82 +47,65 @@ msgid ""
 "check all settings and data within pretix for correctness before you do "
 "anything with the data."
 msgstr ""
-"pretix und XING Events sind unterschiedliche Systeme mit unterschiedlichen "
-"Ansätzen zum Thema Ticketing. Nicht alles kann 1:1 übertragen werden und "
-"nicht alles ist über die API von XING Events zugänglich. Wir bemühen uns, "
-"dass dieser Import in möglichst allen Fällen das richtige tut, aber es ist "
-"Ihre Verantwortung, die übernommenen Einstellungen und Daten in pretix "
-"nochmal auf Korrektheit zu überprüfen."
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/index.html:26
 msgid ""
 "In the next step, you will be able to select which events and which parts of "
 "the data you want to migrate."
 msgstr ""
-"Im nächsten Schritt können Sie auswählen, welche Veranstaltungen und welche "
-"Datenkategorien Sie übernehmen wollen."
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/index.html:33
 msgid "Continue"
-msgstr "Fortfahren"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:8
 msgid "Select events to migrate"
-msgstr "Veranstaltungen zur Übernahme auswählen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:14
 msgid "select all rows for batch-operation"
-msgstr "Alle Zeilen für Sammel-Operation auswählen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:17
 msgid "Title"
-msgstr "Titel"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:18
 msgid "Date"
-msgstr "Datum"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:38
 msgid "Select what to migrate"
-msgstr "Datenkategorien zur Übernahme auswählen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:43
 msgid ""
 "Import event settings, products, prices, availabilities, user data fields"
 msgstr ""
-"Importiere Veranstaltungseinstellungen, Produkte, Preise, Verfügbarkeiten, "
-"Datenfelder"
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:50
 msgid "Import promotion codes / vouchers"
-msgstr "Importiere Promotioncodes / Gutscheine"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:57
 msgid "Import sold tickets / orders / payments (includes personal data)"
 msgstr ""
-"Importiere verkaufte Tickets / Bestellungen / Zahlungen (enthält "
-"personenbezogene Daten)"
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/selection.html:62
 msgid "Start importing"
-msgstr "Import starten"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:13
 msgid ""
 "Your import is currently running. If you have a large event or many events, "
 "this could take a while, please be patient and check back later!"
 msgstr ""
-"Ihr Import läuft gerade. Wenn Sie eine große Veranstaltung oder viele "
-"Veranstaltungen haben, könnte dies eine Weile dauern, bitte haben Sie Geduld "
-"und probieren Sie es später erneut!"
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:17
 msgid ""
 "Your import is waiting to start. This should only take a few seconds or "
 "minutes. The page will refresh automatically."
 msgstr ""
-"Ihr Import wartet auf den Start. Das sollte nur ein paar Sekunden oder "
-"Minuten dauern. Diese Seite wird sich automatisch neu laden."
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:24
 msgid ""
@@ -127,94 +113,88 @@ msgid ""
 "data probably contains something we did not expect – please conctact pretix "
 "support, we'll figure this out for you as quickly as possible."
 msgstr ""
-"Der Import ist fehlgeschlagen, nicht alle Ihre Veranstaltungen konnten "
-"importiert werden. Ihre XING-Events-Daten enthielten vermutlich etwas, womit "
-"wir nicht gerechnet haben. Bitte kontaktieren Sie unseren Support, wir "
-"werden das Problem schnellstmöglich lösen."
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:28
 msgid "We imported your data successfully!"
-msgstr "Wir haben Ihre Daten erfolgreich importiert!"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:31
 msgid "You still have some final steps to do:"
-msgstr "Sie haben noch ein paar Aufgaben vor sich:"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:35
 msgid "Configure payments, invoicing, and cancellation options"
-msgstr "Zahlungen, Rechnungswesen und Erstattungsoptionen konfigurieren"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:38
 msgid "Review products, settings, and quotas"
-msgstr "Produkte, Einstellungen und Kontingente kontrollieren"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:41
 msgid "Customize your shop with logos, colours, texts, and ticket layouts"
-msgstr "Ihren Shop mit Logos, Farben, Texten und Ticketlayouts anpassen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:44
 msgid "Test if purchases work as intended"
-msgstr "Testen, ob Bestellungen wie erwartet funktionieren"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:47
 msgid "Invite your co-workers"
-msgstr "Ihre Kolleg*innen in das System einladen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:51
 msgid ""
 "If you need any help, do not hesitate to call us at +49 6221 3217750 or "
 "write us at support@pretix.eu!"
 msgstr ""
-"Wenn Sie dabei Hilfe brauchen, zögern Sie bitte nicht, uns unter +49 6221 "
-"3217750 anzurufen oder uns unter support@pretix.eu zu schreiben."
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:54
 msgid "Your new pretix events"
-msgstr "Ihre neuen pretix-Veranstaltungen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:59
 msgid "Event name"
-msgstr "Veranstaltungstitel"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:62
 msgid "Start date"
-msgstr "Startdatum"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:64
 msgid "End date"
-msgstr "Enddatum"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:67
 msgid "Status"
-msgstr "Status"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:86
 msgid "Series"
-msgstr "Reihe"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:102
 msgid "Shop disabled"
-msgstr "Shop deaktiviert"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:104
 msgid "Presale over"
-msgstr "Verkauf beendet"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:106
 msgid "Presale not started"
-msgstr "noch nicht gestartet"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/templates/pretix_migrate_from_xing_events/status.html:108
 msgid "On sale"
-msgstr "Aktiv"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/views.py:28
 msgid "E-mail address you use to log into XING Events"
-msgstr "E-Mail-Adresse mit der Sie sich bei XING Events einloggen"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/views.py:32
 msgid "XING Events API Key"
-msgstr "XING-Events-API-Schlüssel"
+msgstr ""
 
 #: pretix_migrate_from_xing_events/views.py:34
 msgid ""
@@ -223,16 +203,10 @@ msgid ""
 "matter, the API key type can be \"Watcher keys\", as we do not need write "
 "access."
 msgstr ""
-"Um den API-Schlüssel zu erstellen, rufen Sie im XING EventManager \"Mein "
-"Konto\" auf, dann \"API-Schlüssel\", dann \"API-Schlüssel erzeugen\". Der "
-"Name des Schlüssels ist beliebig, der Schlüssel-Typ kann \"Beobachter-"
-"Schlüssel\" sein, da wir keinen Schreibzugriff benötigen."
 
 #: pretix_migrate_from_xing_events/views.py:61
 msgid "XING Events returned an error that looks like your API key is invalid."
 msgstr ""
-"XING Events hat einen Fehler zurückgegeben, der vermutlich bedeutet, dass "
-"Ihr API-Schlüssel nicht stimmt."
 
 #: pretix_migrate_from_xing_events/views.py:68
 #, python-brace-format
@@ -240,8 +214,6 @@ msgid ""
 "We were unable to reach XING Events to validate your key. Error message: "
 "{msg}"
 msgstr ""
-"Wir waren nicht in der Lage XING Events zu erreichen um Ihren API-Schlüssel "
-"zu überprüfen. Fehlermeldung: {msg}"
 
 #: pretix_migrate_from_xing_events/views.py:75
 #: pretix_migrate_from_xing_events/views.py:177
@@ -250,17 +222,12 @@ msgid ""
 "and your API key. Please check again that the e-mail address is the correct "
 "one."
 msgstr ""
-"Wir konnten kein XING-Events-Konto finden, das zu E-Mail-Adresse und API-"
-"Schlüssel passt. Prüfen Sie bitte nochmal, dass Sie die richtige E-Mail-"
-"Adresse verwenden."
 
 #: pretix_migrate_from_xing_events/views.py:80
 msgid ""
 "We could find multiple XING Events account matching your e-mail address "
 "based and your API key. Please contact pretix support."
 msgstr ""
-"Wir konnten mehrere XING-Events-Konten finden, die zu Ihrer E-Mail-Adresse "
-"passen. Kontaktieren Sie bitte den pretix-Support."
 
 #: pretix_migrate_from_xing_events/views.py:87
 #, python-brace-format
@@ -268,18 +235,14 @@ msgid ""
 "We were unable to reach XING Events to validate your key. Error message: "
 "{err}"
 msgstr ""
-"Wir waren nicht in der Lage XING Events zu erreichen um Ihren API-Schlüssel "
-"zu überprüfen. Fehlermeldung: {err}"
 
 #: pretix_migrate_from_xing_events/views.py:119
 msgid "Your changes have been saved."
-msgstr "Ihre Änderungen wurden gespeichert."
+msgstr ""
 
 #: pretix_migrate_from_xing_events/views.py:125
 msgid "We could not save your changes. See below for details."
 msgstr ""
-"Die Änderungen konnten nicht gespeichert werden, siehe weiter unten für "
-"Details."
 
 #: pretix_migrate_from_xing_events/views.py:200
 #, python-brace-format
@@ -287,12 +250,3 @@ msgid ""
 "We were unable to reach XING Events to fetch your events. Error message: "
 "{msg}"
 msgstr ""
-"Wir waren nicht in der Lage XING Events zu erreichen um Ihre Veranstaltungen "
-"abzurufen. Fehlermeldung: {msg}"
-
-#~ msgid ""
-#~ "We were unable to reach XING Events to validate your key. Error message: "
-#~ "{str(e)}"
-#~ msgstr ""
-#~ "Wir waren nicht in der Lage XING Events zu erreichen um Ihren API-"
-#~ "Schlüssel zu überprüfen. Fehlermeldung: {str(e)}"

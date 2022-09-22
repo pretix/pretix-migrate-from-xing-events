@@ -58,14 +58,16 @@ class ApiSettingsForm(SettingsForm):
                 if r.status_code == 403:
                     logger.error(f'XING events returned: {r.text}')
                     raise ValidationError(
-                        _('XING Events returned an error that looks like your API is invalid.')
+                        _('XING Events returned an error that looks like your API key is invalid.')
                     )
                 r.raise_for_status()
                 d = r.json()
                 if not d['success']:
                     logger.error(f'XING events returned: {r.text}')
                     raise ValidationError(
-                        _(f'We were unable to reach XING Events to validate your key. Error message: {str(d["errors"])}')
+                        _('We were unable to reach XING Events to validate your key. Error message: {msg}').format(
+                            msg={str(d["errors"])}
+                        )
                     )
 
                 if not d['ids']:
@@ -82,7 +84,9 @@ class ApiSettingsForm(SettingsForm):
             except requests.RequestException as e:
                 logger.exception('Could not reach XING events')
                 raise ValidationError(
-                    _(f'We were unable to reach XING Events to validate your key. Error message: {str(e)}')
+                    _('We were unable to reach XING Events to validate your key. Error message: {err}').format(
+                        err=str(e)
+                    )
                 )
 
         return data
@@ -193,7 +197,9 @@ class SelectionView(OrganizerPermissionRequiredMixin, TemplateView):
             logger.exception('Could not reach XING events')
             messages.error(
                 self.request,
-                _(f'We were unable to reach XING Events to fetch your keys. Error message: {str(e)}')
+                _(f'We were unable to reach XING Events to fetch your events. Error message: {msg}').format(
+                    msg=str(e)
+                )
             )
             return None
 
