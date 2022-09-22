@@ -1,0 +1,37 @@
+{% extends "pretixcontrol/organizers/base.html" %}
+{% load i18n %}
+{% load bootstrap3 %}
+{% block inner %}
+    <h1>{% trans "Migrate from XING Events" %}</h1>
+    <form class="form-horizontal" action="" method="post">
+        <p>
+            {% blocktrans trimmed %}
+                This tool helps you to migrate your existing data from XING Events to pretix to save you
+                work in switching over.
+            {% endblocktrans %}
+        </p>
+        <div class="alert alert-info">
+            {% blocktrans trimmed %}
+                pretix and XING Events are different systems with different approaches to ticketing.
+                Not everything can be translated 1:1, and not everything is even accessible through XING's
+                API. We tried our best to have this import do the right thing in as many cases as possible,
+                but it is your responsibility to check all settings and data within pretix for correctness
+                before you do anything with the data.
+            {% endblocktrans %}
+        </div>
+        {% csrf_token %}
+        {% bootstrap_form form layout="control" %}
+
+        <p>
+            {% blocktrans trimmed %}
+                In the next step, you will be able to select which events and which parts of the data
+                you want to migrate.
+            {% endblocktrans %}
+        </p>
+        <div class="form-group submit-group">
+            <button type="submit" class="btn btn-primary btn-save">
+                {% trans "Continue" %}
+            </button>
+        </div>
+    </form>
+{% endblock %}

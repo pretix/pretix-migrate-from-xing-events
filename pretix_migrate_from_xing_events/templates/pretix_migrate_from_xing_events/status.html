@@ -1,0 +1,116 @@
+{% extends "pretixcontrol/organizers/base.html" %}
+{% load i18n %}
+{% load bootstrap3 %}
+{% block inner %}
+    <h1>{% trans "Migrate from XING Events" %}</h1>
+    {% if result.status == "PENDING" or result.status == "STARTED" or result.status == "PROGRESS" %}
+        <div class="empty-collection">
+            <p>
+                <span class="fa big-grey-icon fa-cog fa big-rotating-icon"></span>
+            </p>
+            {% if result.status == "STARTED" or result.status == "PROGRESS" %}
+                <p>
+                    {% trans "Your import is currently running. If you have a large event or many events, this could take a while, please be patient and check back later!" %}
+                </p>
+            {% else %}
+                <p>
+                    {% trans "Your import is waiting to start. This should only take a few seconds or minutes. The page will refresh automatically." %}
+                </p>
+            {% endif %}
+            <meta http-equiv="refresh" content="2">
+        </div>
+    {% elif result.state == "FAILURE" %}
+        <div class="alert alert-danger">
+            {% trans "The import failed, not all of your events were imported. Your XING Events data probably contains something we did not expect – please conctact pretix support, we'll figure this out for you as quickly as possible." %}
+        </div>
+    {% elif result.state == "SUCCESS" %}
+        <div class="alert alert-success">
+            {% trans "We imported your data successfully!" %}
+        </div>
+        <p>
+            {% trans "You still have some final steps to do:" %}
+        </p>
+        <ul>
+            <li>
+                {% trans "Configure payments, invoicing, and cancellation options" %}
+            </li>
+            <li>
+                {% trans "Review products, settings, and quotas" %}
+            </li>
+            <li>
+                {% trans "Customize your shop with logos, colours, texts, and ticket layouts" %}
+            </li>
+            <li>
+                {% trans "Test if purchases work as intended" %}
+            </li>
+            <li>
+                {% trans "Invite your co-workers" %}
+            </li>
+        </ul>
+        <p>
+            {% trans "If you need any help, do not hesitate to call us at +49 6221 3217750 or write us at support@pretix.eu!" %}
+        </p>
+
+        <h3>{% trans "Your new pretix events" %}</h3>
+        <table class="table table-condensed table-hover">
+            <thead>
+            <tr>
+                <th>
+                    {% trans "Event name" %}
+                </th>
+                <th>
+                    {% trans "Start date" %}
+                    /
+                    {% trans "End date" %}
+                </th>
+                <th>
+                    {% trans "Status" %}
+                </th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for e in events %}
+                <tr>
+                    <td class="event-name-col">
+                        <strong><a href="{% url "control:event.index" organizer=e.organizer.slug event=e.slug %}"
+                                   target="_blank">{{ e.name }}</a></strong>
+                        <br><small>{{ e.slug }}</small>
+                    </td>
+                    <td class="event-date-col">
+                        {% if e.has_subevents %}
+                            {{ e.min_from|default_if_none:""|date:"SHORT_DATETIME_FORMAT" }}
+                        {% else %}
+                            {{ e.get_short_date_from_display }}
+                        {% endif %}
+                        {% if e.has_subevents %}
+                            <span class="label label-default">{% trans "Series" %}</span>
+                        {% endif %}
+                        {% if e.settings.show_date_to and e.date_to %}
+                            –<br>
+                            {% if e.has_subevents %}
+                                {{ e.max_fromto|default_if_none:e.max_from|default_if_none:e.max_to|default_if_none:""|date:"SHORT_DATETIME_FORMAT" }}
+                            {% else %}
+                                {{ e.get_short_date_to_display }}
+                            {% endif %}
+                        {% endif %}
+                        {% if e.settings.timezone != request.timezone %}
+                            <span class="fa fa-globe text-muted" data-toggle="tooltip" title="{{ e.timezone }}"></span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not e.live %}
+                            <span class="label label-danger">{% trans "Shop disabled" %}</span>
+                        {% elif e.presale_has_ended %}
+                            <span class="label label-warning">{% trans "Presale over" %}</span>
+                        {% elif not e.presale_is_running %}
+                            <span class="label label-warning">{% trans "Presale not started" %}</span>
+                        {% else %}
+                            <span class="label label-success">{% trans "On sale" %}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}
