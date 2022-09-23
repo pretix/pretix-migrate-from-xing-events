@@ -110,13 +110,13 @@ class IndexView(OrganizerSettingsFormView):
                     }
                 )
 
-            if form.cleaned_data["pretix_migrate_from_xing_events_apikey"]:
+            if form.cleaned_data["pretix_migrate_from_xing_events_apikey"] and form.cleaned_data["pretix_migrate_from_xing_events_email"]:
                 return redirect(reverse(
                     'plugins:pretix_migrate_from_xing_events:selection',
                     kwargs={'organizer': self.request.organizer.slug}
                 ))
             else:
-                messages.success(self.request, _('Your changes have been saved.'))
+                messages.warning(self.request, _('To continue, please fill out both fields.'))
                 return redirect(reverse(
                     'plugins:pretix_migrate_from_xing_events:index',
                     kwargs={'organizer': self.request.organizer.slug}
@@ -197,11 +197,12 @@ class SelectionView(OrganizerPermissionRequiredMixin, TemplateView):
             logger.exception('Could not reach XING events')
             messages.error(
                 self.request,
-                _(f'We were unable to reach XING Events to fetch your events. Error message: {msg}').format(
+                _('We were unable to reach XING Events to fetch your events. Error message: {msg}').format(
                     msg=str(e)
                 )
             )
             return None
+
 
 class StatusView(OrganizerPermissionRequiredMixin, TemplateView):
     template_name = "pretix_migrate_from_xing_events/status.html"
