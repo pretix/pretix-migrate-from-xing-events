@@ -671,7 +671,7 @@ class XINGEventsImporter:
                 else:
                     q = event.quotas.get_or_create(size=None, name=f'Voucher: {code_def["name"]}')[0]
                     items = [
-                        mv.item for mv in ItemMetaValue.objects.get(
+                        mv.item for mv in ItemMetaValue.objects.filter(
                             property=prop_import_id_ticket,
                             value__in=[str(c) for c in code_def["categories"]],
                             item__event=event,
