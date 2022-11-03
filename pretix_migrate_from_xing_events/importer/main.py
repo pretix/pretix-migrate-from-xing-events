@@ -23,7 +23,7 @@ from pretix.base.models import Event, ItemMetaValue, Item, ItemVariation, Questi
     Checkin, QuestionAnswer, InvoiceAddress, OrderFee, Voucher, Quota
 from pretix.base.settings import LazyI18nStringList
 from pretix.base.templatetags.rich_text import ALLOWED_TAGS, ALLOWED_ATTRIBUTES, ALLOWED_PROTOCOLS
-from .client import XINGEventsAPIClient
+from pretix_migrate_from_xing_events.importer.client import XINGEventsAPIClient
 
 
 class XINGEventsImporter:
@@ -199,7 +199,7 @@ class XINGEventsImporter:
         # todo: onlineUrl → digitalcontent?
         # ticketShop.closed?
 
-        admission_items = self._import_ticket_categories(event, language, event_id, ts['availableLimit'])
+        admission_items = self._import_ticket_categories(event, language, event_id, ts.get('availableLimit'))
         self._import_product_definitions(event, language, event_id, admission_items)
         self._import_userdata_definitions(event, language, event_id, admission_items)
 
