@@ -1,20 +1,20 @@
-from django.conf.urls import url
+from django.urls import path
 
 from . import views
 
 urlpatterns = [
-    url(
-        r"^control/organizer/(?P<organizer>[^/]+)/migrate_from_xing/$",
+    path(
+        "control/organizer/<str:organizer>/migrate_from_xing/",
         views.IndexView.as_view(),
         name="index",
     ),
-    url(
-        r"^control/organizer/(?P<organizer>[^/]+)/migrate_from_xing/selection/$",
+    path(
+        "control/organizer/<str:organizer>/migrate_from_xing/selection/",
         views.SelectionView.as_view(),
         name="selection",
     ),
-    url(
-        r"^control/organizer/(?P<organizer>[^/]+)/migrate_from_xing/status/(?P<taskid>[^/]+)/$",
+    path(
+        "control/organizer/<str:organizer>/migrate_from_xing/status/<str:taskid>/",
         views.StatusView.as_view(),
         name="status",
     ),
