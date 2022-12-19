@@ -8,6 +8,7 @@ except ImportError:
 
 
 class PluginApp(PluginConfig):
+    default = True
     name = "pretix_migrate_from_xing_events"
     verbose_name = "Migration Assistant from XING Events"
 
