@@ -101,7 +101,7 @@ class XINGEventsImporter:
 
         event.save()
 
-        if ts['commercial'] and ts['salesTax']:
+        if ts['commercial'] and ts.get('salesTax'):
             self._tax_rule = event.tax_rules.get_or_create(
                 rate=Decimal(ts['salesTax']) / Decimal('100.00'),
                 defaults={
