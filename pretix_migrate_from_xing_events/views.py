@@ -183,7 +183,10 @@ class SelectionView(OrganizerPermissionRequiredMixin, TemplateView):
             events = []
             d = c._get(f'user/{uid}/events', timeout=5)
             for eid in d['events']:
-                events.append(c._get(f'event/{eid}', timeout=5)['event'])
+                try:
+                    events.append(c._get(f'event/{eid}', timeout=5)['event'])
+                except:
+                    logger.exception('XING Events API error')
 
             for e in events:
                 e['selectedDate'] = parse(e['selectedDate'])
